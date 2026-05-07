@@ -335,15 +335,27 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Force open a URL by simulating a real link click (bypasses popup blockers)
+  // Force open a URL using multiple strategies
   const forceOpenUrl = (url) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Strategy 1: Create hidden anchor and click it
+    try {
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch(e) {
+      // Strategy 2: window.open
+      try {
+        window.open(url, '_blank');
+      } catch(e2) {
+        // Strategy 3: Navigate directly (leaves current page but always works)
+        window.location.href = url;
+      }
+    }
   };
 
   const respond = (text, url = null) => {
@@ -353,7 +365,8 @@ export default function App() {
     speak(text); 
     
     if (url) {
-      forceOpenUrl(url);
+      // Small delay so the voice starts first, then open
+      setTimeout(() => forceOpenUrl(url), 300);
     }
 
     setTimeout(() => {
@@ -577,23 +590,11 @@ export default function App() {
                   initial={{ opacity: 0, scale: 0.8, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 1.1, y: -20 }}
-                  className="absolute bottom-1/4 glass-panel px-8 py-4 neon-border-cyan flex flex-col items-center gap-4"
+                  className="absolute bottom-1/4 glass-panel px-8 py-4 neon-border-cyan"
                 >
                   <p className="text-xl font-medium text-cyan-300 neon-text-cyan tracking-wide italic">
                     "{aiResponse}"
                   </p>
-                  {pendingUrl && (
-                    <motion.a 
-                      href={pendingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="px-6 py-2 bg-cyan-500/20 border border-cyan-400 text-cyan-400 text-xs font-bold uppercase tracking-widest rounded-full hover:bg-cyan-500 hover:text-white transition-all pointer-events-auto"
-                    >
-                      Click to Launch App
-                    </motion.a>
-                  )}
                 </motion.div>
               )}
             </AnimatePresence>
