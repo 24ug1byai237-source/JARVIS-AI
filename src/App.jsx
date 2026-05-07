@@ -335,43 +335,23 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Force open a URL using multiple strategies
+  // This ALWAYS works - navigates the current tab after JARVIS speaks
   const forceOpenUrl = (url) => {
-    // Strategy 1: Create hidden anchor and click it
-    try {
-      const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch(e) {
-      // Strategy 2: window.open
-      try {
-        window.open(url, '_blank');
-      } catch(e2) {
-        // Strategy 3: Navigate directly (leaves current page but always works)
-        window.location.href = url;
-      }
-    }
+    window.location.href = url;
   };
 
   const respond = (text, url = null) => {
     setAiResponse(text);
-    setPendingUrl(url);
     addLog(`AI: ${text}`);
     speak(text); 
     
     if (url) {
-      // Small delay so the voice starts first, then open
-      setTimeout(() => forceOpenUrl(url), 300);
+      // Wait 1.5 seconds so user hears JARVIS speak, then navigate
+      setTimeout(() => forceOpenUrl(url), 1500);
     }
 
     setTimeout(() => {
       setAiResponse('');
-      setPendingUrl(null);
     }, 5000);
   };
 
