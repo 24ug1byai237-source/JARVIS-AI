@@ -310,10 +310,27 @@ export default function App() {
     return () => recognition.stop();
   }, [recognition]);
 
+  const pendingWindowRef = useRef(null);
+
   const toggleListening = () => {
     if (isListening) {
       recognition.stop();
+      // Close the pre-opened tab if no command used it
+      if (pendingWindowRef.current && !pendingWindowRef.current.closed) {
+        pendingWindowRef.current.close();
+      }
+      pendingWindowRef.current = null;
     } else {
+      // Pre-open a blank tab NOW (during user click = always allowed)
+      pendingWindowRef.current = window.open('about:blank', '_blank');
+      if (pendingWindowRef.current) {
+        pendingWindowRef.current.document.write(`
+          <html><body style="background:#000;color:#06b6d4;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+            <h1 style="font-size:24px;letter-spacing:8px;animation:pulse 2s infinite">JARVIS LISTENING...</h1>
+            <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>
+          </body></html>
+        `);
+      }
       recognition.start();
     }
   };
@@ -327,7 +344,6 @@ export default function App() {
     utterance.rate = 1.0;
     utterance.pitch = 0.95;
     
-    // Voices load asynchronously in some browsers
     const voices = window.speechSynthesis.getVoices();
     const jarvisVoice = voices.find(v => v.name.includes('English') && (v.name.includes('Male') || v.name.includes('UK')));
     if (jarvisVoice) utterance.voice = jarvisVoice;
@@ -335,9 +351,16 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // This ALWAYS works - navigates the current tab after JARVIS speaks
+  // Opens URL in the pre-opened tab (new tab, no blocking)
   const forceOpenUrl = (url) => {
-    window.location.href = url;
+    if (pendingWindowRef.current && !pendingWindowRef.current.closed) {
+      // Navigate the pre-opened tab to the URL
+      pendingWindowRef.current.location.href = url;
+      pendingWindowRef.current = null;
+    } else {
+      // Fallback: try window.open (NEVER navigate away from JARVIS)
+      window.open(url, '_blank');
+    }
   };
 
   const respond = (text, url = null) => {
@@ -346,8 +369,13 @@ export default function App() {
     speak(text); 
     
     if (url) {
-      // Wait 1.5 seconds so user hears JARVIS speak, then navigate
-      setTimeout(() => forceOpenUrl(url), 1500);
+      setTimeout(() => forceOpenUrl(url), 1000);
+    } else {
+      // No URL needed, close the pre-opened tab
+      if (pendingWindowRef.current && !pendingWindowRef.current.closed) {
+        pendingWindowRef.current.close();
+        pendingWindowRef.current = null;
+      }
     }
 
     setTimeout(() => {
