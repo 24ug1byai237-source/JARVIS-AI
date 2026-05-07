@@ -335,6 +335,17 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
+  // Force open a URL by simulating a real link click (bypasses popup blockers)
+  const forceOpenUrl = (url) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const respond = (text, url = null) => {
     setAiResponse(text);
     setPendingUrl(url);
@@ -342,28 +353,21 @@ export default function App() {
     speak(text); 
     
     if (url) {
-      // Attempt automatic open (might be blocked)
-      const win = window.open(url, '_blank');
-      if (!win) {
-        addLog("System: Popup blocked. Please use manual launch button.");
-      }
+      forceOpenUrl(url);
     }
 
     setTimeout(() => {
       setAiResponse('');
       setPendingUrl(null);
-    }, 5000); // Keep open longer for manual click if blocked
+    }, 5000);
   };
 
   const handleVoiceCommand = (rawCmd) => {
-    let cmd = rawCmd.toLowerCase();
+    let cmd = rawCmd.toLowerCase().trim();
     
-    // Check for "Jarvis" wake word or prefix
+    // Strip "Jarvis" wake word
     if (cmd.includes('jarvis')) {
       cmd = cmd.replace('jarvis', '').trim();
-    } else {
-      // If the user didn't say Jarvis, we ignore it or just log it as background noise
-      // For this demo, let's allow it but prefix the log
     }
 
     addLog(`> ${rawCmd}`);
@@ -372,77 +376,96 @@ export default function App() {
       respond("Yes, sir? How can I help you?");
       return;
     }
-    
-    // Web Navigation
+
+    // --- SMART COMMAND MATCHING ---
+
+    // 1. Direct App Commands
     if (cmd.includes('open youtube')) {
-      respond('Opening YouTube.', COMMANDS.YOUTUBE);
+      respond('Opening YouTube.', 'https://www.youtube.com');
     } else if (cmd.includes('open google')) {
-      respond('Opening Google Search.', COMMANDS.GOOGLE);
+      respond('Opening Google.', 'https://www.google.com');
     } else if (cmd.includes('open spotify')) {
-      respond('Launching Spotify.', COMMANDS.SPOTIFY);
+      respond('Launching Spotify.', 'https://open.spotify.com');
     } else if (cmd.includes('open github')) {
-      respond('Accessing GitHub repositories.', COMMANDS.GITHUB);
+      respond('Accessing GitHub.', 'https://github.com');
     } else if (cmd.includes('open netflix')) {
-      respond('Initiating Netflix.', COMMANDS.NETFLIX);
+      respond('Opening Netflix.', 'https://www.netflix.com');
     } else if (cmd.includes('open chatgpt')) {
-      respond('Connecting to AI Neural Link.', COMMANDS.CHATGPT);
+      respond('Connecting to AI Neural Link.', 'https://chat.openai.com');
     } else if (cmd.includes('open calculator')) {
-      respond('Opening System Calculator.', COMMANDS.CALCULATOR);
+      respond('Opening Calculator.', 'https://www.google.com/search?q=calculator');
+    } else if (cmd.includes('open instagram')) {
+      respond('Opening Instagram.', 'https://www.instagram.com');
+    } else if (cmd.includes('open twitter') || cmd.includes('open x')) {
+      respond('Opening X.', 'https://x.com');
+    } else if (cmd.includes('open linkedin')) {
+      respond('Opening LinkedIn.', 'https://www.linkedin.com');
+    } else if (cmd.includes('open amazon')) {
+      respond('Opening Amazon.', 'https://www.amazon.in');
+    } else if (cmd.includes('open whatsapp')) {
+      respond('Opening WhatsApp.', 'https://web.whatsapp.com');
     }
-    
-    // System Commands
-    else if (cmd.includes('activate dream mode')) {
-      respond('Dream Mode sequence initiated.');
-      setDreamMode(true);
-    } else if (cmd.includes('deactivate dream mode') || cmd.includes('exit dream mode')) {
-      respond('Exiting Dream Mode. Returning to standard UI.');
-      setDreamMode(false);
-    } else if (cmd.includes('open dashboard')) {
-      respond('Displaying holographic dashboard.');
-    } else if (cmd.includes('start scan')) {
-      respond('Scanning local environment for anomalies...');
-    } else if (cmd.includes('open galaxy view')) {
-      respond('Mapping stellar coordinates.');
-    } else if (cmd.includes('launch simulation')) {
-      respond('Loading simulation kernel v.X72.');
+
+    // 2. PLAY ANY SONG — "play [song name]"
+    else if (cmd.startsWith('play ')) {
+      const songName = cmd.replace('play ', '').trim();
+      if (songName) {
+        setMusicTrack(songName.charAt(0).toUpperCase() + songName.slice(1));
+        setIsPlaying(true);
+        const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songName + ' song')}`;
+        respond(`Playing ${songName}.`, searchUrl);
+      }
     }
-    
-    // Music Commands
-    else if (cmd.includes('play believer')) {
-      setMusicTrack('Believer - Imagine Dragons');
-      setIsPlaying(true);
-      respond('Playing Believer by Imagine Dragons.', MUSIC_TRACKS.BELIEVER);
-    } else if (cmd.includes('play relaxing music')) {
-      setMusicTrack('Ambient Meditations');
-      setIsPlaying(true);
-      respond('Playing soothing ambient tracks.', MUSIC_TRACKS.RELAXING);
-    } else if (cmd.includes('play lo-fi beats')) {
-      setMusicTrack('Lofi Hip Hop Radio');
-      setIsPlaying(true);
-      respond('Playing Lo-Fi Study Beats.', MUSIC_TRACKS['LO-FI']);
-    } else if (cmd.includes('play cinematic music')) {
-      setMusicTrack('Cinematic Masterpieces');
-      setIsPlaying(true);
-      respond('Playing Orchestral Epic tracks.', MUSIC_TRACKS.CINEMATIC);
-    } else if (cmd.includes('pause music') || cmd.includes('stop music')) {
-      respond('Music playback suspended.');
-      setIsPlaying(false);
-    } 
-    
-    // WhatsApp Messaging
-    else if (cmd.includes('message')) {
+
+    // 3. SEARCH / WATCH MOVIE — "watch [movie]" or "movie [name]"
+    else if (cmd.includes('watch ') || cmd.includes('movie ')) {
+      const query = cmd.replace('watch ', '').replace('movie ', '').trim();
+      if (query) {
+        const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' full movie trailer')}`;
+        respond(`Searching for ${query}.`, searchUrl);
+      }
+    }
+
+    // 4. GOOGLE SEARCH — "search [anything]" or "google [anything]"
+    else if (cmd.startsWith('search ') || cmd.startsWith('google ')) {
+      const query = cmd.replace('search ', '').replace('google ', '').trim();
+      if (query) {
+        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+        respond(`Searching Google for ${query}.`, searchUrl);
+      }
+    }
+
+    // 5. OPEN ANY WEBSITE — "open [website]"
+    else if (cmd.startsWith('open ')) {
+      const site = cmd.replace('open ', '').trim();
+      if (site) {
+        const url = site.includes('.') ? `https://${site}` : `https://www.google.com/search?q=${encodeURIComponent(site)}`;
+        respond(`Opening ${site}.`, url);
+      }
+    }
+
+    // 6. WhatsApp Messaging
+    else if (cmd.includes('message') || cmd.includes('text') || cmd.includes('whatsapp')) {
       const contactName = Object.keys(CONTACTS).find(name => cmd.includes(name));
       if (contactName) {
         const phone = CONTACTS[contactName];
-        respond(`Opening WhatsApp to message ${contactName}.`);
-        window.open(`https://web.whatsapp.com/send?phone=${phone}`, '_blank');
+        respond(`Opening WhatsApp to message ${contactName}.`, `https://web.whatsapp.com/send?phone=${phone}`);
       } else {
         respond("Contact not found in neural database.");
       }
     }
 
-    // System Controls (Cinematic Simulation)
-    else if (cmd.includes('shutdown')) {
+    // 7. System Commands
+    else if (cmd.includes('activate dream mode')) {
+      respond('Dream Mode sequence initiated.');
+      setDreamMode(true);
+    } else if (cmd.includes('deactivate dream mode') || cmd.includes('exit dream mode') || cmd.includes('normal mode')) {
+      respond('Exiting Dream Mode.');
+      setDreamMode(false);
+    } else if (cmd.includes('pause music') || cmd.includes('stop music') || cmd.includes('stop')) {
+      respond('Music paused.');
+      setIsPlaying(false);
+    } else if (cmd.includes('shutdown')) {
       respond("Initiating full system shutdown. Goodbye, sir.");
       setTimeout(() => setSystemState('shutdown'), 2000);
     } else if (cmd.includes('restart')) {
@@ -452,10 +475,27 @@ export default function App() {
         setTimeout(() => window.location.reload(), 3000);
       }, 2000);
     }
-    
+
+    // 8. TIME & DATE
+    else if (cmd.includes('time')) {
+      respond(`The current time is ${new Date().toLocaleTimeString()}.`);
+    } else if (cmd.includes('date')) {
+      respond(`Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.`);
+    }
+
+    // 9. WHO ARE YOU / GREETINGS
+    else if (cmd.includes('who are you') || cmd.includes('your name')) {
+      respond("I am JARVIS. Your personal AI assistant, sir.");
+    } else if (cmd.includes('hello') || cmd.includes('hi') || cmd.includes('hey')) {
+      respond("Hello sir. How may I assist you today?");
+    } else if (cmd.includes('thank')) {
+      respond("You're welcome, sir. Always at your service.");
+    }
+
+    // 10. FALLBACK — Search anything else on Google
     else {
-      // Stay silent for unknown commands or just log them
-      addLog(`System: Unknown command structure detected.`);
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(cmd)}`;
+      respond(`Searching for: ${cmd}.`, searchUrl);
     }
   };
 
