@@ -312,25 +312,34 @@ export default function App() {
 
   const pendingWindowRef = useRef(null);
 
+  // Pre-open a blank "JARVIS" loading tab
+  const prepareNewTab = () => {
+    try {
+      const w = window.open('about:blank', '_blank');
+      if (w) {
+        w.document.write(`
+          <html><body style="background:#000;color:#06b6d4;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+            <h1 style="font-size:24px;letter-spacing:8px;animation:pulse 2s infinite">JARVIS LOADING...</h1>
+            <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>
+          </body></html>
+        `);
+        return w;
+      }
+    } catch(e) {}
+    return null;
+  };
+
   const toggleListening = () => {
     if (isListening) {
       recognition.stop();
-      // Close the pre-opened tab if no command used it
+      // Close unused pre-opened tab
       if (pendingWindowRef.current && !pendingWindowRef.current.closed) {
         pendingWindowRef.current.close();
       }
       pendingWindowRef.current = null;
     } else {
-      // Pre-open a blank tab NOW (during user click = always allowed)
-      pendingWindowRef.current = window.open('about:blank', '_blank');
-      if (pendingWindowRef.current) {
-        pendingWindowRef.current.document.write(`
-          <html><body style="background:#000;color:#06b6d4;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
-            <h1 style="font-size:24px;letter-spacing:8px;animation:pulse 2s infinite">JARVIS LISTENING...</h1>
-            <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>
-          </body></html>
-        `);
-      }
+      // Pre-open a tab NOW (during user click = always allowed by browser)
+      pendingWindowRef.current = prepareNewTab();
       recognition.start();
     }
   };
@@ -351,16 +360,17 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Opens URL in the pre-opened tab (new tab, no blocking)
+  // Opens URL in the pre-opened tab, then prepares next tab
   const forceOpenUrl = (url) => {
     if (pendingWindowRef.current && !pendingWindowRef.current.closed) {
-      // Navigate the pre-opened tab to the URL
+      // Navigate the pre-opened tab
       pendingWindowRef.current.location.href = url;
-      pendingWindowRef.current = null;
     } else {
-      // Fallback: try window.open (NEVER navigate away from JARVIS)
+      // Fallback: try regular window.open
       window.open(url, '_blank');
     }
+    // Immediately prepare a new tab for the next command
+    pendingWindowRef.current = prepareNewTab();
   };
 
   const respond = (text, url = null) => {
@@ -371,11 +381,7 @@ export default function App() {
     if (url) {
       setTimeout(() => forceOpenUrl(url), 1000);
     } else {
-      // No URL needed, close the pre-opened tab
-      if (pendingWindowRef.current && !pendingWindowRef.current.closed) {
-        pendingWindowRef.current.close();
-        pendingWindowRef.current = null;
-      }
+      // No URL needed — keep the pre-opened tab for the next command
     }
 
     setTimeout(() => {
