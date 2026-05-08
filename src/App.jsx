@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Sphere, MeshDistortMaterial, Float, PerspectiveCamera, Text, Stars, PresentationControls } from '@react-three/drei';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { 
+  Sphere, MeshDistortMaterial, Float, PerspectiveCamera, Text, Stars, 
+  PresentationControls, Environment, OrbitControls 
+} from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import { 
   Mic, MicOff, Music, Terminal, LayoutDashboard, Settings, 
-  Search, Power, Youtube, Github, Chrome, Play, Pause, 
-  SkipForward, SkipBack, Volume2, Maximize2, Cpu, Activity,
-  Globe, Shield, Zap, Database, BarChart3, Radio, MessageSquare,
-  Lock, Unlock, ChevronRight
+  Youtube, Github, Activity, Database, Zap, MessageSquare,
+  Lock, Unlock, ChevronRight, Power, Cpu, Shield
 } from 'lucide-react';
 
 // --- CONTACTS ---
@@ -123,33 +125,21 @@ const BackgroundParticles = ({ dreamMode, isUnlocked }) => {
   );
 };
 
-const FloatingPanel3D = ({ position, rotation, title, dreamMode, isUnlocked }) => {
-  if (!isUnlocked) return null;
+const FloatingGrid = ({ dreamMode }) => {
+  const gridRef = useRef();
+  useFrame((state) => {
+    gridRef.current.position.z = (state.clock.getElapsedTime() * 0.5) % 2;
+  });
+
   return (
-    <Float speed={1.5} rotationIntensity={0.5} floatIntensity={0.5}>
-      <mesh position={position} rotation={rotation}>
-        <planeGeometry args={[4, 2.5]} />
-        <meshStandardMaterial 
-          color={dreamMode ? "#20002c" : "#000814"} 
-          transparent 
-          opacity={0.4} 
-          roughness={0.1}
-          metalness={0.8}
-        />
-        <Text
-          position={[0, 1, 0.1]}
-          fontSize={0.2}
-          color={dreamMode ? "#bc13fe" : "#00f2ff"}
-          font="https://fonts.gstatic.com/s/orbitron/v11/yMJRMIPr_8-x7p0qK7Y83FpL9A.woff"
-        >
-          {title}
-        </Text>
-      </mesh>
-    </Float>
+    <group ref={gridRef}>
+      <gridHelper 
+        args={[100, 50, dreamMode ? "#8b5cf6" : "#06b6d4", dreamMode ? "#4c1d95" : "#083344"]} 
+        position={[0, -5, 0]} 
+      />
+    </group>
   );
 };
-
-// --- UI COMPONENTS ---
 
 const GlassCard = ({ children, className, delay = 0 }) => (
   <motion.div
@@ -229,11 +219,9 @@ export default function App() {
       recognition.onstart = () => setIsListening(true);
       recognition.onend = () => setIsListening(false);
       recognition.onresult = (event) => {
-        // Only process final results to prevent double execution
         const lastResult = event.results[event.results.length - 1];
         if (lastResult.isFinal) {
           const command = lastResult[0].transcript.toLowerCase().trim();
-          // Prevent exact repetition in short bursts
           if (command !== lastCommandRef.current) {
             lastCommandRef.current = command;
             handleCommand(command);
@@ -245,7 +233,6 @@ export default function App() {
       recognitionRef.current = recognition;
     }
 
-    // Cinematic Startup
     setTimeout(() => setBooting(false), 3000);
 
     const handleMouseMove = (e) => {
@@ -255,12 +242,11 @@ export default function App() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Voice Synthesis
   const speak = useCallback((text) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.1; // Slightly faster for more JARVIS-like feel
+      utterance.rate = 1.1;
       utterance.pitch = 0.9;
       utterance.volume = 1;
       window.speechSynthesis.speak(utterance);
@@ -269,9 +255,7 @@ export default function App() {
 
   const addLog = useCallback((text, type = 'ai') => {
     setTerminalLogs(prev => [...prev, { text, type }].slice(-20));
-    if (type === 'ai') {
-      speak(text);
-    }
+    if (type === 'ai') speak(text);
   }, [speak]);
 
   const handleCommand = useCallback((command) => {
@@ -279,7 +263,7 @@ export default function App() {
     if (!cmd || isProcessingRef.current) return;
     
     isProcessingRef.current = true;
-    setIsProcessing(true); // Keep state for UI feedback if needed
+    setIsProcessing(true);
     addLog(command, 'user');
     
     let response = "";
@@ -311,13 +295,10 @@ export default function App() {
     } else if (cmd.includes('activate dream mode')) {
       response = 'Dream Mode activated. Modifying environment.';
       setDreamMode(true);
-    } else if (cmd.includes('start scan')) {
-      response = 'System-wide diagnostic initiated.';
     } else if (cmd.includes('stop listening')) {
       response = 'Voice recognition standby.';
       toggleListening();
     }
-    // Generic Play Song Command
     else if (cmd.includes('play ') || cmd.includes('play song')) {
       let song = cmd.replace('play song', '').replace('play', '').trim();
       if (song) {
@@ -333,12 +314,10 @@ export default function App() {
       response = 'Audio sequence halted.';
       setIsMusicPlaying(false);
     } 
-    // WhatsApp Messaging Command
     else if (cmd.startsWith('message') || cmd.startsWith('send message to')) {
       const parts = cmd.split(' ');
       let name = "";
       let message = "";
-      
       if (cmd.startsWith('send message to')) {
         name = parts[3];
         message = parts.slice(4).join(' ');
@@ -346,7 +325,6 @@ export default function App() {
         name = parts[1];
         message = parts.slice(2).join(' ');
       }
-
       const contact = CONTACTS[name.toLowerCase()];
       if (contact) {
         response = `Transmitting message to ${name.toUpperCase()} via WhatsApp.`;
@@ -360,26 +338,21 @@ export default function App() {
       response = 'Command recognized. Protocol undefined.';
     }
 
-    if (response) {
-      addLog(response, 'ai');
-    }
+    if (response) addLog(response, 'ai');
 
-    // Cooldown
     setTimeout(() => {
       isProcessingRef.current = false;
       setIsProcessing(false);
     }, 2000);
-  }, [addLog]); // Removed isProcessing from dependencies as we use Ref
+  }, [addLog]);
 
   const handleUnlock = () => {
     gsap.to(".boot-overlay", { opacity: 0, duration: 1, onComplete: () => setIsUnlocked(true) });
     addLog('Biometric verified. Welcome back, Ullas.', 'ai');
-    // Start listening automatically on unlock
     setTimeout(() => {
       if (!isListening) recognitionRef.current?.start();
     }, 1500);
   };
-
 
   const toggleListening = () => {
     if (isListening) {
@@ -413,7 +386,6 @@ export default function App() {
     <div className={`h-screen w-screen relative overflow-hidden transition-colors duration-1000 ${dreamMode ? 'bg-[#100018]' : 'bg-[#050505]'}`}>
       <div className="scanline"></div>
       
-      {/* 3D Background Layer */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <Canvas shadows dpr={[1, 2]}>
           <PerspectiveCamera makeDefault position={[0, 0, 8]} />
@@ -434,17 +406,20 @@ export default function App() {
               isUnlocked={isUnlocked}
               onUnlock={handleUnlock}
             />
-            
-            <FloatingPanel3D position={[-6, 2, -2]} rotation={[0, 0.5, 0]} title="Core Diagnostics" dreamMode={dreamMode} isUnlocked={isUnlocked} />
-            <FloatingPanel3D position={[6, -2, -2]} rotation={[0, -0.5, 0]} title="Neural Mapping" dreamMode={dreamMode} isUnlocked={isUnlocked} />
           </PresentationControls>
 
           <BackgroundParticles dreamMode={dreamMode} isUnlocked={isUnlocked} />
+          <FloatingGrid dreamMode={dreamMode} />
           <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+          
+          <Suspense fallback={null}>
+            <EffectComposer>
+              <Bloom intensity={1.5} luminanceThreshold={0.1} radius={0.5} />
+            </EffectComposer>
+          </Suspense>
         </Canvas>
       </div>
 
-      {/* Unlock Overlay */}
       {!isUnlocked && (
         <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md boot-overlay pointer-events-auto">
           <motion.div 
@@ -468,10 +443,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Grid Overlay */}
       <div className={`grid-bg transition-opacity duration-1000 ${dreamMode ? 'opacity-20' : 'opacity-10'}`}></div>
 
-      {/* Main UI Overlay */}
       <AnimatePresence>
         {isUnlocked && (
           <motion.div 
@@ -479,7 +452,6 @@ export default function App() {
             animate={{ opacity: 1 }}
             className="absolute inset-0 z-10 flex flex-col p-8 pointer-events-none"
           >
-            {/* Header */}
             <header className="flex justify-between items-start pointer-events-auto">
               <motion.div
                 initial={{ x: -50, opacity: 0 }}
@@ -505,21 +477,10 @@ export default function App() {
                   </div>
                   {isListening ? <Mic size={18} className="text-green-500" /> : <MicOff size={18} className="text-red-500" />}
                 </GlassCard>
-                <GlassCard className="px-4 py-2 flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="font-rajdhani text-[10px] text-white/40 uppercase tracking-tighter">System Time</div>
-                    <div className="font-orbitron text-xs text-lumina-cyan">
-                      {new Date().toLocaleTimeString([], { hour12: false })}
-                    </div>
-                  </div>
-                  <Activity size={18} className="text-lumina-cyan" />
-                </GlassCard>
               </div>
             </header>
 
-            {/* Dashboard Content */}
             <main className="flex-1 flex gap-8 mt-12 pointer-events-none">
-              {/* Left Sidebar */}
               <aside className="w-20 flex flex-col gap-4 pointer-events-auto">
                 {[
                   { id: 'dashboard', icon: LayoutDashboard },
@@ -542,7 +503,6 @@ export default function App() {
                 ))}
               </aside>
 
-              {/* Center Content */}
               <div className="flex-1 flex flex-col gap-8 pointer-events-none">
                 <div className="flex-1 grid grid-cols-12 gap-8 pointer-events-auto">
                   <div className="col-span-8 flex flex-col gap-8">
@@ -566,12 +526,6 @@ export default function App() {
                             ))}
                           </div>
                           <div className="mt-8 flex-1 glass-panel p-6 rounded-xl relative overflow-hidden">
-                            <div className="flex justify-between items-center mb-4">
-                              <span className="font-orbitron text-xs tracking-widest opacity-40">ACTIVITY LOG</span>
-                              <div className="flex gap-1">
-                                {[1,2,3,4,5].map(i => <div key={i} className="w-1 h-3 bg-lumina-cyan/50 animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />)}
-                              </div>
-                            </div>
                             <TerminalLog logs={terminalLogs} />
                           </div>
                         </div>
@@ -616,27 +570,10 @@ export default function App() {
                         </div>
                       )}
                     </GlassCard>
-
-                    <div className="h-48 grid grid-cols-3 gap-8">
-                      <GlassCard className="flex flex-col justify-between group hover:border-lumina-cyan transition-colors cursor-pointer" onClick={() => handleCommand('open youtube')}>
-                        <Youtube className="text-red-500" />
-                        <div className="font-orbitron text-xs">YOUTUBE</div>
-                      </GlassCard>
-                      <GlassCard className="flex flex-col justify-between group hover:border-lumina-cyan transition-colors cursor-pointer" onClick={() => handleCommand('open chatgpt')}>
-                        <Activity className="text-green-500" />
-                        <div className="font-orbitron text-xs">CHAT GPT</div>
-                      </GlassCard>
-                      <GlassCard className="flex flex-col justify-between group hover:border-lumina-cyan transition-colors cursor-pointer" onClick={() => handleCommand('open github')}>
-                        <Github className="text-white" />
-                        <div className="font-orbitron text-xs">GITHUB</div>
-                      </GlassCard>
-                    </div>
                   </div>
 
                   <div className="col-span-4 flex flex-col gap-8">
                     <GlassCard className="flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-full p-4 border-b border-white/5 text-[10px] font-orbitron text-lumina-cyan uppercase tracking-widest">Neural Status</div>
-                      
                       <div className={`w-32 h-32 rounded-full border-2 ${isListening ? 'border-lumina-cyan shadow-[0_0_30px_rgba(0,242,255,0.3)]' : 'border-white/10'} flex items-center justify-center transition-all duration-500`}>
                         {isListening ? (
                           <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
@@ -667,32 +604,21 @@ export default function App() {
               </div>
             </main>
 
-            {/* Footer */}
             <footer className="mt-8 flex justify-between items-end pointer-events-auto">
               <div className="flex gap-8 font-rajdhani text-[10px] tracking-widest text-white/30 uppercase">
                 <div className="flex flex-col">
                   <span>Connection</span>
                   <span className="text-lumina-cyan font-bold">SECURE // P2P</span>
                 </div>
-                <div className="flex flex-col">
-                  <span>Battery</span>
-                  <span className="text-lumina-cyan font-bold">94%</span>
-                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex gap-1">
-                  {[1,2,3,4,5,6].map(i => <div key={i} className={`w-2 h-4 ${i < 5 ? 'bg-lumina-cyan' : 'bg-white/10'} rounded-sm`} />)}
-                </div>
-                <button onClick={() => window.location.reload()} className="p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-all">
-                  <Power size={20} />
-                </button>
-              </div>
+              <button onClick={() => window.location.reload()} className="p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-all">
+                <Power size={20} />
+              </button>
             </footer>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Mouse Trail */}
       <motion.div
         className={`fixed w-6 h-6 rounded-full pointer-events-none z-50 blur-md ${dreamMode ? 'bg-lumina-purple/30' : 'bg-lumina-cyan/30'}`}
         animate={{
