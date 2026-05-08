@@ -285,12 +285,14 @@ export default function App() {
     // MediaPipe detection removed for stable manual demo
   }, [isLocked]);
 
+  const isProcessingRef = useRef(false);
+
   // Voice Recognition Setup
   const recognition = useMemo(() => {
     if (!window.webkitSpeechRecognition && !window.SpeechRecognition) return null;
     const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
     const rec = new SpeechRecognition();
-    rec.continuous = true;
+    rec.continuous = false; // False is more stable for single commands
     rec.interimResults = false;
     rec.lang = 'en-US';
     return rec;
@@ -300,8 +302,18 @@ export default function App() {
     if (!recognition) return;
 
     recognition.onresult = (event) => {
-      const command = event.results[event.results.length - 1][0].transcript.toLowerCase();
-      handleVoiceCommand(command);
+      if (isProcessingRef.current) return; // Prevent double trigger
+      
+      const result = event.results[event.results.length - 1];
+      if (result.isFinal) {
+        const command = result[0].transcript.toLowerCase().trim();
+        if (command) {
+          isProcessingRef.current = true;
+          handleVoiceCommand(command);
+          // Cooldown to prevent immediate re-triggering
+          setTimeout(() => { isProcessingRef.current = false; }, 3000);
+        }
+      }
     };
 
     recognition.onerror = (event) => {
@@ -353,28 +365,23 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const workerWindowRef = useRef(null);
-
   const openInNewTab = (url) => {
-    if (workerWindowRef.current && !workerWindowRef.current.closed) {
-      // Use the pre-authorized tab (Bypasses all blockers!)
-      workerWindowRef.current.location.href = url;
-      workerWindowRef.current.focus();
-    } else {
-      // Fallback to normal open
-      window.open(url, '_blank');
+    // Direct attempt - bypasses blocks if browser thinks mic-activation is a 'gesture'
+    const newWin = window.open(url, '_blank');
+    if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
+      addLog("System: Popup blocked. Please use the [LAUNCH] button.");
     }
   };
 
   const respond = (text, url = null) => {
     setAiResponse(text);
-    setPendingUrl(url); // Set the URL for the UI button
+    setPendingUrl(url); 
     addLog(`AI: ${text}`);
     speak(text);
     
     if (url) {
-      // Automatic open using the Worker Tab
-      setTimeout(() => openInNewTab(url), 1000);
+      // Execute IMMEDIATELY (no delay) to stay in the same event stack
+      openInNewTab(url);
     }
 
     setTimeout(() => {
@@ -746,19 +753,6 @@ export default function App() {
                 onClick={() => { 
                   setIsLocked(false); 
                   respond("Biometric scan complete. Welcome back, sir.");
-                  // Open the secret worker tab (authorized by this click)
-                  workerWindowRef.current = window.open('about:blank', 'jarvis-worker');
-                  if (workerWindowRef.current) {
-                    workerWindowRef.current.document.write(`
-                      <html><body style="background:#000;color:#06b6d4;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;overflow:hidden">
-                        <div style="text-align:center">
-                          <h1 style="font-size:20px;letter-spacing:10px;animation:pulse 2s infinite">JARVIS NEURAL LINK</h1>
-                          <p style="color:#083344;font-size:10px;margin-top:20px">KEEP THIS TAB OPEN FOR AUTOMATIC COMMANDS</p>
-                        </div>
-                        <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.2}}</style>
-                      </body></html>
-                    `);
-                  }
                 }}
                 className="w-48 h-48 border-4 border-cyan-400 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(6,182,212,0.5)] bg-cyan-500/10 pointer-events-auto cursor-pointer"
               >
