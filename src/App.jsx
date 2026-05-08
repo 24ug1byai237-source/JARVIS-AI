@@ -353,8 +353,17 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
+  const workerWindowRef = useRef(null);
+
   const openInNewTab = (url) => {
-    window.open(url, '_blank');
+    if (workerWindowRef.current && !workerWindowRef.current.closed) {
+      // Use the pre-authorized tab (Bypasses all blockers!)
+      workerWindowRef.current.location.href = url;
+      workerWindowRef.current.focus();
+    } else {
+      // Fallback to normal open
+      window.open(url, '_blank');
+    }
   };
 
   const respond = (text, url = null) => {
@@ -364,14 +373,14 @@ export default function App() {
     speak(text);
     
     if (url) {
-      // Try to open automatically (might be blocked, that's why we have the button)
+      // Automatic open using the Worker Tab
       setTimeout(() => openInNewTab(url), 1000);
     }
 
     setTimeout(() => {
       setAiResponse('');
-      setPendingUrl(null); // Clear URL after 5 seconds
-    }, 5000);
+      setPendingUrl(null);
+    }, url ? 10000 : 5000); // 10 seconds for URLs, 5 seconds for normal speech
   };
 
   const handleVoiceCommand = (rawCmd) => {
@@ -734,7 +743,23 @@ export default function App() {
               <motion.button 
                 whileHover={{ scale: 1.1, rotate: 10 }}
                 whileTap={{ scale: 0.9 }}
-                onClick={() => { setIsLocked(false); respond("Biometric scan complete. Welcome back, sir."); }}
+                onClick={() => { 
+                  setIsLocked(false); 
+                  respond("Biometric scan complete. Welcome back, sir.");
+                  // Open the secret worker tab (authorized by this click)
+                  workerWindowRef.current = window.open('about:blank', 'jarvis-worker');
+                  if (workerWindowRef.current) {
+                    workerWindowRef.current.document.write(`
+                      <html><body style="background:#000;color:#06b6d4;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;overflow:hidden">
+                        <div style="text-align:center">
+                          <h1 style="font-size:20px;letter-spacing:10px;animation:pulse 2s infinite">JARVIS NEURAL LINK</h1>
+                          <p style="color:#083344;font-size:10px;margin-top:20px">KEEP THIS TAB OPEN FOR AUTOMATIC COMMANDS</p>
+                        </div>
+                        <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.2}}</style>
+                      </body></html>
+                    `);
+                  }
+                }}
                 className="w-48 h-48 border-4 border-cyan-400 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(6,182,212,0.5)] bg-cyan-500/10 pointer-events-auto cursor-pointer"
               >
                 <div className="text-6xl animate-pulse">👋</div>
