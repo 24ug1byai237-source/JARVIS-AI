@@ -359,14 +359,19 @@ export default function App() {
 
   const respond = (text, url = null) => {
     setAiResponse(text);
+    setPendingUrl(url); // Set the URL for the UI button
     addLog(`AI: ${text}`);
     speak(text);
     
     if (url) {
+      // Try to open automatically (might be blocked, that's why we have the button)
       setTimeout(() => openInNewTab(url), 1000);
     }
 
-    setTimeout(() => setAiResponse(''), 5000);
+    setTimeout(() => {
+      setAiResponse('');
+      setPendingUrl(null); // Clear URL after 5 seconds
+    }, 5000);
   };
 
   const handleVoiceCommand = (rawCmd) => {
@@ -571,11 +576,22 @@ export default function App() {
                   initial={{ opacity: 0, scale: 0.8, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 1.1, y: -20 }}
-                  className="absolute bottom-1/4 glass-panel px-8 py-4 neon-border-cyan"
+                  className="absolute bottom-1/4 glass-panel px-8 py-4 neon-border-cyan flex flex-col items-center gap-4 z-50"
                 >
-                  <p className="text-xl font-medium text-cyan-300 neon-text-cyan tracking-wide italic">
+                  <p className="text-xl font-medium text-cyan-300 neon-text-cyan tracking-wide italic text-center">
                     "{aiResponse}"
                   </p>
+                  
+                  {pendingUrl && (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => openInNewTab(pendingUrl)}
+                      className="px-6 py-2 bg-cyan-500/20 border border-cyan-400 text-cyan-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-full pointer-events-auto shadow-[0_0_20px_rgba(34,211,238,0.4)]"
+                    >
+                      EXECUTE LAUNCH sequence
+                    </motion.button>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
