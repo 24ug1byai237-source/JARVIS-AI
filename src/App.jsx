@@ -304,11 +304,32 @@ export default function App() {
       handleVoiceCommand(command);
     };
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      addLog(`System Error: ${event.error}`);
+    };
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      addLog("System: JARVIS is listening...");
+    };
+
+    recognition.onend = () => {
+      // Auto-restart if we're supposed to be listening (makes it more stable than continuous:true)
+      if (isListening) {
+        try {
+          recognition.start();
+        } catch(e) {
+          console.error("Failed to restart recognition:", e);
+        }
+      } else {
+        setIsListening(false);
+        addLog("System: Mic deactivated.");
+      }
+    };
 
     return () => recognition.stop();
-  }, [recognition]);
+  }, [recognition, isListening]);
 
   const toggleListening = () => {
     if (isListening) {
@@ -350,74 +371,61 @@ export default function App() {
 
   const handleVoiceCommand = (rawCmd) => {
     let cmd = rawCmd.toLowerCase().trim();
-    
-    // Strip "Jarvis" wake word
-    if (cmd.includes('jarvis')) {
-      cmd = cmd.replace('jarvis', '').trim();
-    }
-
     addLog(`> ${rawCmd}`);
-    
-    if (cmd === "") {
+
+    // If it's just "Jarvis", respond
+    if (cmd === "jarvis") {
       respond("Yes, sir? How can I help you?");
       return;
     }
 
-    // --- SMART COMMAND MATCHING ---
+    // --- FLEXIBLE COMMAND MATCHING ---
 
-    // 1. Direct App Commands
-    if (cmd.includes('open youtube')) {
+    // 1. App Commands
+    if (cmd.includes('youtube')) {
       respond('Opening YouTube.', 'https://www.youtube.com');
-    } else if (cmd.includes('open google')) {
+    } else if (cmd.includes('google')) {
       respond('Opening Google.', 'https://www.google.com');
-    } else if (cmd.includes('open spotify')) {
+    } else if (cmd.includes('spotify')) {
       respond('Launching Spotify.', 'https://open.spotify.com');
-    } else if (cmd.includes('open github')) {
+    } else if (cmd.includes('github')) {
       respond('Accessing GitHub.', 'https://github.com');
-    } else if (cmd.includes('open netflix')) {
+    } else if (cmd.includes('netflix')) {
       respond('Opening Netflix.', 'https://www.netflix.com');
-    } else if (cmd.includes('open chatgpt')) {
+    } else if (cmd.includes('chatgpt') || cmd.includes('openai')) {
       respond('Connecting to AI Neural Link.', 'https://chat.openai.com');
-    } else if (cmd.includes('open calculator')) {
+    } else if (cmd.includes('calculator')) {
       respond('Opening Calculator.', 'https://www.google.com/search?q=calculator');
-    } else if (cmd.includes('open instagram')) {
+    } else if (cmd.includes('instagram')) {
       respond('Opening Instagram.', 'https://www.instagram.com');
-    } else if (cmd.includes('open twitter') || cmd.includes('open x')) {
-      respond('Opening X.', 'https://x.com');
-    } else if (cmd.includes('open linkedin')) {
-      respond('Opening LinkedIn.', 'https://www.linkedin.com');
-    } else if (cmd.includes('open amazon')) {
-      respond('Opening Amazon.', 'https://www.amazon.in');
-    } else if (cmd.includes('open whatsapp')) {
+    } else if (cmd.includes('whatsapp')) {
       respond('Opening WhatsApp.', 'https://web.whatsapp.com');
     }
 
-    // 2. PLAY ANY SONG — "play [song name]"
-    else if (cmd.startsWith('play ')) {
-      const songName = cmd.replace('play ', '').trim();
+    // 2. Play Music/Videos
+    else if (cmd.includes('play ')) {
+      const songName = cmd.split('play ')[1].trim();
       if (songName) {
         setMusicTrack(songName.charAt(0).toUpperCase() + songName.slice(1));
         setIsPlaying(true);
-        const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songName + ' song')}`;
+        const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songName)}`;
         respond(`Playing ${songName}.`, searchUrl);
       }
     }
 
-    // 3. SEARCH / WATCH MOVIE — "watch [movie]" or "movie [name]"
+    // 3. Movies
     else if (cmd.includes('watch ') || cmd.includes('movie ')) {
-      const query = cmd.replace('watch ', '').replace('movie ', '').trim();
-      if (query) {
-        const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' full movie trailer')}`;
-        respond(`Searching for ${query}.`, searchUrl);
+      const movie = (cmd.includes('watch ') ? cmd.split('watch ')[1] : cmd.split('movie ')[1]).trim();
+      if (movie) {
+        respond(`Searching for movie: ${movie}.`, `https://www.youtube.com/results?search_query=${encodeURIComponent(movie + ' movie')}`);
       }
     }
 
-    // 4. GOOGLE SEARCH — "search [anything]" or "google [anything]"
-    else if (cmd.startsWith('search ') || cmd.startsWith('google ')) {
-      const query = cmd.replace('search ', '').replace('google ', '').trim();
+    // 4. General Search
+    else if (cmd.includes('search ') || cmd.includes('google ')) {
+      const query = (cmd.includes('search ') ? cmd.split('search ')[1] : cmd.split('google ')[1]).trim();
       if (query) {
-        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-        respond(`Searching Google for ${query}.`, searchUrl);
+        respond(`Searching for ${query}.`, `https://www.google.com/search?q=${encodeURIComponent(query)}`);
       }
     }
 
