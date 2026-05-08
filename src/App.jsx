@@ -463,8 +463,8 @@ export default function App() {
     else if (cmd.includes('message') || cmd.includes('text') || cmd.includes('whatsapp')) {
       const contactName = Object.keys(CONTACTS).find(name => cmd.includes(name));
       if (contactName) {
-        const phone = CONTACTS[contactName];
-        respond(`Opening WhatsApp to message ${contactName}.`, `https://web.whatsapp.com/send?phone=${phone}`);
+        const phone = CONTACTS[contactName].replace('+', ''); 
+        respond(`Opening WhatsApp Desktop to message ${contactName}.`, `whatsapp://send?phone=${phone}`);
       } else {
         respond("Contact not found in neural database.");
       }
